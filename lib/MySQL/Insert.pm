@@ -5,9 +5,21 @@ use strict;
 
 our $MAX_ROWS_TO_QUERY = 1000;
 
+=encoding cp1252
+
 =head1 NAME
 
-MySQL::Insert - extended inserts for MySQL via DBI
+MySQL::Insert
+
+=head1 DESCRIPTION
+
+Extended inserts for MySQL via DBI.
+
+Use multiple-row INSERT syntax that include several VALUES lists.
+(for example INSERT INTO test VALUES ('1',Some data',2234),('2','Some More Data',23444)).
+
+EXTENDED INSERT syntax is more efficient of execution many insert queries.
+It is not compatible with most RDBMSes.
 
 =cut
 
@@ -15,7 +27,7 @@ our $VERSION = '0.06';
 
 =head1 SYNOPSIS
 
-    # Insert two rows into sample_table using $dbh database handle
+Insert two rows into sample_table using $dbh database handle
 
     use MySQL::Insert;
 
@@ -44,18 +56,13 @@ our $VERSION = '0.06';
 
     undef $inserter;
 
-=head1 DESCRIPTION
-
-Use multiple-row INSERT syntax that include several VALUES lists.
-(for example INSERT INTO test VALUES ('1',Some data',2234),('2','Some More Data',23444)).
-EXTENDED INSERT syntax is more efficient of execution many insert queries.
-It is not compatible with most RDBMSes.
-
 =head1 FUNCTIONS / METHODS
 
 The following methods are available:
 
-=head2 new
+=over
+
+=item B<new>()
 
 Create new MySQL::Insert object
 
@@ -85,7 +92,7 @@ sub _init {
     $self->{_on_duplicate_update} = $ext_params{on_duplicate_update};
 }
 
-=head2 set_fields
+=item B<set_fields>($self, @fields | \@fields)
 
 Set fields list (by plain list or list reference)
 
@@ -104,7 +111,7 @@ sub set_fields {
     return 1;
 }
 
-=head2 get_fields
+=item B<get_fields>($self)
 
 Get fields list (or its quantity in scalar context)
 
@@ -125,7 +132,7 @@ DESTROY {
     $self->_execute_query();
 }
 
-=head2 insert_row
+=item B<insert_row>($self, @new_rows)
 
 Schedule row for insertion
 
@@ -137,10 +144,10 @@ sub insert_row {
     my $query_executed = 0;
 
     foreach my $new_row ( @new_rows ) {
-	$query_executed = 1 if $self->_finish_current_row();
+        $query_executed = 1 if $self->_finish_current_row();
 
-	$self->{_do_append_row_to_query} = 1;
-	$self->{_current_row} = $new_row;
+        $self->{_do_append_row_to_query} = 1;
+        $self->{_current_row} = $new_row;
    }
 
     return $query_executed;
@@ -155,13 +162,13 @@ sub _finish_current_row {
 
     if ( $self->{_do_append_row_to_query} ) {
 
-	if ( $self->{_total_rows} >= $MAX_ROWS_TO_QUERY ) {
-	    $query_executed = $self->_execute_query();
-	}
+        if ( $self->{_total_rows} >= $MAX_ROWS_TO_QUERY ) {
+            $query_executed = $self->_execute_query();
+        }
 
-	$self->_append_row_to_query_rows;
+        $self->_append_row_to_query_rows;
 
-	$self->{_do_append_row_to_query} = 0;
+        $self->{_do_append_row_to_query} = 0;
     }
 
     return $query_executed;
@@ -178,11 +185,11 @@ sub _execute_query {
 
     if ( $self->{_statement} =~ /^INSERT/i && $self->{_on_duplicate_update} ) {
 
-	my $update_statement = join ', ',
-	    map { "$_ = " . $self->_prepare_value( $self->{_on_duplicate_update}->{$_} ) }
-		keys %{ $self->{_on_duplicate_update} };
+        my $update_statement = join ', ',
+            map { "$_ = " . $self->_prepare_value( $self->{_on_duplicate_update}->{$_} ) }
+        	keys %{ $self->{_on_duplicate_update} };
 
-	$query .= ' ON DUPLICATE KEY UPDATE ' . $update_statement;
+        $query .= ' ON DUPLICATE KEY UPDATE ' . $update_statement;
     }
 
     my $result = $self->{_dbh}->do( $query ) or return;
@@ -199,20 +206,20 @@ sub _append_row_to_query_rows {
     my ( $self ) = @_;
 
     unless ( $self->get_fields() ) {
-	die 'Undefined field names!' unless ref $self->{_current_row} eq 'HASH';
+        die 'Undefined field names!' unless ref $self->{_current_row} eq 'HASH';
 
-	$self->set_fields( keys %{$self->{_current_row}} );
+        $self->set_fields( keys %{$self->{_current_row}} );
     }
 
     my @data_row;
 
     if ( ref $self->{_current_row} eq 'HASH' ) {
-	for my $field ( $self->get_fields() ) {
-	    push @data_row, $self->_prepare_value( $self->{_current_row}->{ $field } );
-	}
+        for my $field ( $self->get_fields() ) {
+            push @data_row, $self->_prepare_value( $self->{_current_row}->{ $field } );
+        }
     }
     else {
-	push @data_row, map { $self->_prepare_value( $_ ) } @{ $self->{_current_row} };
+        push @data_row, map { $self->_prepare_value( $_ ) } @{ $self->{_current_row} };
     }
 
     push @{$self->{_query_rows}}, "\n\t( ".join(', ', @data_row)." )";
@@ -225,31 +232,33 @@ sub _prepare_value {
     my ( $self, $value ) = @_;
 
     if ( ref $value eq 'SCALAR' ) {
-	return ${ $value } || q{''};
+        return ${ $value } || q{''};
     }
     else {
-	return $self->{_dbh}->quote( $value );
+        return $self->{_dbh}->quote( $value );
     }
 }
 
+=back
 
 =head1 AUTHORS
 
 Gleb Tumanov C<< <gleb at reg.ru> >> (original author)
+
 Walery Studennikov C<< <despair at cpan.org> >> (CPAN distribution)
 
 =head1 BUGS
 
 Please report any bugs or feature requests to C<bug-mysql-insert at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=MySQL-Insert>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
+the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=MySQL-Insert> or through L<https://github.com/regru/MySQL-Insert/issues>.
+
+I will be notified, and then you'll automatically be notified of progress on your bug as I make changes.
 
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-
 =cut
 
-1; # End of MySQL::Insert
+1;
